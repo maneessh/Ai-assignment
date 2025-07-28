@@ -1,19 +1,19 @@
 import pandas as pd
 import numpy as np
-from sklearn.model_selection import train_test_split, cross_val_score, StratifiedKFold
+from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
-
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.metrics import (
     accuracy_score, precision_score, recall_score, f1_score,
-    confusion_matrix, classification_report, roc_curve, auc,
-    matthews_corrcoef, precision_recall_curve, average_precision_score
+    confusion_matrix, roc_curve, auc, matthews_corrcoef,
+    precision_recall_curve, average_precision_score, roc_auc_score
 )
 from sklearn.utils.class_weight import compute_class_weight
 from sklearn.utils import resample
 import seaborn as sns
 import matplotlib.pyplot as plt
 import warnings
+
 warnings.filterwarnings('ignore')
 
 # Load dataset
@@ -45,11 +45,11 @@ features = ['country_encoded', 'cumulative_total_cases', 'active_cases', 'cumula
 X = df[features]
 y = df['HasCases']
 
-# Feature scaling (important for logistic regression)
+# Feature scaling
 scaler = StandardScaler()
 X_scaled = scaler.fit_transform(X)
 
-# Split data with stratification to maintain class balance
+# Split data with stratification
 X_train, X_test, y_train, y_test = train_test_split(
     X_scaled, y, test_size=0.2, random_state=42, stratify=y
 )
@@ -59,7 +59,7 @@ print(pd.Series(y_train).value_counts())
 print(f"Test set class distribution:")
 print(pd.Series(y_test).value_counts())
 
-# ========== MODEL 1: BASELINE LOGISTIC REGRESSION ==========
+# ===== MODEL 1: BASELINE LOGISTIC REGRESSION =====
 print("\n" + "="*50)
 print("MODEL 1: BASELINE LOGISTIC REGRESSION")
 print("="*50)
@@ -74,14 +74,14 @@ print(f"Accuracy: {accuracy_score(y_test, baseline_pred):.4f}")
 print(f"Precision: {precision_score(y_test, baseline_pred):.4f}")
 print(f"Recall: {recall_score(y_test, baseline_pred):.4f}")
 print(f"F1 Score: {f1_score(y_test, baseline_pred):.4f}")
+print(f"ROC-AUC Score: {roc_auc_score(y_test, baseline_prob):.4f}")
 print(f"MCC: {matthews_corrcoef(y_test, baseline_pred):.4f}")
 
-# ========== MODEL 2: CLASS WEIGHTED LOGISTIC REGRESSION ==========
+# ===== MODEL 2: CLASS WEIGHTED LOGISTIC REGRESSION =====
 print("\n" + "="*50)
 print("MODEL 2: CLASS WEIGHTED LOGISTIC REGRESSION")
 print("="*50)
 
-# Compute class weights
 class_weights = compute_class_weight('balanced', classes=np.unique(y_train), y=y_train)
 class_weight_dict = {0: class_weights[0], 1: class_weights[1]}
 print(f"Computed class weights: {class_weight_dict}")
@@ -100,33 +100,29 @@ print(f"Accuracy: {accuracy_score(y_test, weighted_pred):.4f}")
 print(f"Precision: {precision_score(y_test, weighted_pred):.4f}")
 print(f"Recall: {recall_score(y_test, weighted_pred):.4f}")
 print(f"F1 Score: {f1_score(y_test, weighted_pred):.4f}")
+print(f"ROC-AUC Score: {roc_auc_score(y_test, weighted_prob):.4f}")
 print(f"MCC: {matthews_corrcoef(y_test, weighted_pred):.4f}")
 
-# ========== MODEL 3: MANUAL OVERSAMPLING + LOGISTIC REGRESSION ==========
+# ===== MODEL 3: MANUAL OVERSAMPLING + LOGISTIC REGRESSION =====
 print("\n" + "="*50)
 print("MODEL 3: MANUAL OVERSAMPLING + LOGISTIC REGRESSION")
 print("="*50)
 
-# Manual oversampling using sklearn's resample
 def manual_oversample(X, y, random_state=42):
-    # Combine features and target
     df_temp = pd.DataFrame(X)
     df_temp['target'] = y
     
-    # Separate classes
     df_majority = df_temp[df_temp.target == 1]
     df_minority = df_temp[df_temp.target == 0]
     
-    # Upsample minority class
-    df_minority_upsampled = resample(df_minority, 
-                                   replace=True,
-                                   n_samples=len(df_majority),
-                                   random_state=random_state)
+    df_minority_upsampled = resample(
+        df_minority, replace=True,
+        n_samples=len(df_majority),
+        random_state=random_state
+    )
     
-    # Combine majority class with upsampled minority class
     df_upsampled = pd.concat([df_majority, df_minority_upsampled])
     
-    # Separate features and target
     X_resampled = df_upsampled.drop('target', axis=1).values
     y_resampled = df_upsampled['target'].values
     
@@ -148,9 +144,10 @@ print(f"Accuracy: {accuracy_score(y_test, oversampled_pred):.4f}")
 print(f"Precision: {precision_score(y_test, oversampled_pred):.4f}")
 print(f"Recall: {recall_score(y_test, oversampled_pred):.4f}")
 print(f"F1 Score: {f1_score(y_test, oversampled_pred):.4f}")
+print(f"ROC-AUC Score: {roc_auc_score(y_test, oversampled_prob):.4f}")
 print(f"MCC: {matthews_corrcoef(y_test, oversampled_pred):.4f}")
 
-# ========== COMPREHENSIVE EVALUATION ==========
+# ===== COMPREHENSIVE EVALUATION =====
 print("\n" + "="*50)
 print("COMPREHENSIVE MODEL COMPARISON")
 print("="*50)
@@ -182,30 +179,26 @@ for name, (pred, prob) in models.items():
 results_df = pd.DataFrame(results_df)
 print(results_df.round(4))
 
-# ========== VISUALIZATIONS ==========
+# ===== VISUALIZATIONS =====
 
 # 1. Model Comparison Plot
 fig, axes = plt.subplots(2, 2, figsize=(15, 10))
 
-# Accuracy comparison
 axes[0,0].bar(results_df['Model'], results_df['Accuracy'], color='skyblue')
 axes[0,0].set_title('Model Accuracy Comparison')
 axes[0,0].set_ylabel('Accuracy')
 axes[0,0].tick_params(axis='x', rotation=45)
 
-# F1 Score comparison
 axes[0,1].bar(results_df['Model'], results_df['F1'], color='lightgreen')
 axes[0,1].set_title('F1 Score Comparison')
 axes[0,1].set_ylabel('F1 Score')
 axes[0,1].tick_params(axis='x', rotation=45)
 
-# MCC comparison
 axes[1,0].bar(results_df['Model'], results_df['MCC'], color='orange')
 axes[1,0].set_title('Matthews Correlation Coefficient')
 axes[1,0].set_ylabel('MCC')
 axes[1,0].tick_params(axis='x', rotation=45)
 
-# ROC-AUC comparison
 axes[1,1].bar(results_df['Model'], results_df['ROC-AUC'], color='coral')
 axes[1,1].set_title('ROC-AUC Comparison')
 axes[1,1].set_ylabel('ROC-AUC')
@@ -214,15 +207,14 @@ axes[1,1].tick_params(axis='x', rotation=45)
 plt.tight_layout()
 plt.show()
 
-# 2. ROC Curves for all models
+# 2. ROC Curves
 plt.figure(figsize=(10, 8))
 colors = ['blue', 'red', 'green']
 
 for i, (name, (pred, prob)) in enumerate(models.items()):
     fpr, tpr, _ = roc_curve(y_test, prob)
     roc_auc = auc(fpr, tpr)
-    plt.plot(fpr, tpr, color=colors[i], lw=2, 
-             label=f'{name} (AUC = {roc_auc:.3f})')
+    plt.plot(fpr, tpr, color=colors[i], lw=2, label=f'{name} (AUC = {roc_auc:.3f})')
 
 plt.plot([0, 1], [0, 1], 'k--', lw=2, label='Random Classifier')
 plt.xlabel('False Positive Rate')
@@ -234,12 +226,10 @@ plt.show()
 
 # 3. Precision-Recall Curves
 plt.figure(figsize=(10, 8))
-
 for i, (name, (pred, prob)) in enumerate(models.items()):
     precision_curve, recall_curve, _ = precision_recall_curve(y_test, prob)
     pr_auc = average_precision_score(y_test, prob)
-    plt.plot(recall_curve, precision_curve, color=colors[i], lw=2,
-             label=f'{name} (AP = {pr_auc:.3f})')
+    plt.plot(recall_curve, precision_curve, color=colors[i], lw=2, label=f'{name} (AP = {pr_auc:.3f})')
 
 plt.xlabel('Recall')
 plt.ylabel('Precision')
@@ -250,7 +240,6 @@ plt.show()
 
 # 4. Confusion Matrices
 fig, axes = plt.subplots(1, 3, figsize=(15, 5))
-
 for i, (name, (pred, prob)) in enumerate(models.items()):
     cm = confusion_matrix(y_test, pred)
     sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=axes[i])
@@ -286,7 +275,7 @@ for i, (name, model) in enumerate(models_for_coef.items()):
 plt.tight_layout()
 plt.show()
 
-# 6. Correlation Heatmap (Fixed)
+# 6. Correlation Heatmap
 plt.figure(figsize=(10, 8))
 numeric_cols = df.select_dtypes(include=[np.number]).columns
 correlation_matrix = df[numeric_cols].corr()
@@ -295,14 +284,12 @@ plt.title("Correlation Heatmap (Numeric Features)")
 plt.tight_layout()
 plt.show()
 
-# 7. Top 15 Countries by Cumulative Deaths (Fixed seaborn warning)
+# 7. Top 15 Countries by Cumulative Deaths
 plt.figure(figsize=(12, 8))
 country_deaths = df.groupby('country')['cumulative_total_deaths'].max().sort_values(ascending=False).head(15)
-ax = sns.barplot(x=country_deaths.values, y=country_deaths.index, 
-                 hue=country_deaths.index, palette='Reds_r', legend=False)
+sns.barplot(x=country_deaths.values, y=country_deaths.index, palette='Reds_r', dodge=False)
 plt.title("Top 15 Countries by Cumulative COVID-19 Deaths")
 plt.xlabel("Cumulative Deaths")
 plt.ylabel("Country")
 plt.tight_layout()
 plt.show()
-
